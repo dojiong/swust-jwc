@@ -30,6 +30,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import urllib
 import urllib2
 import re
+from lxml import html as H
+from HTMLParser import HTMLParser
 
 
 class JWC(object):
@@ -39,6 +41,7 @@ class JWC(object):
         self.url = self.base_url = url
         self.links = {}
         self._cookie = None
+        self.parser = HTMLParser()
 
     def open(self):
         rep = urllib2.urlopen(self.url)
@@ -96,6 +99,7 @@ class JWC(object):
                         link[i] = urllib.quote(c)
                 self.links[name] = ''.join(link)
             urllib2.urlopen(self._cookieurl + 'content.aspx')
+            self.username = username
             return True
         return False
 
@@ -125,6 +129,23 @@ class JWC(object):
         avg_i = data.find(u'平均学分绩点：') + len(u'平均学分绩点：')
         avg = data[avg_i: data.find('</b>', avg_i)]
         return {'scores': scores, 'avg': float(avg)}
+
+    def get_timetable(self, school_year='', term=''):
+        rep = self.get_page(u'学生个人课表', xnd=school_year, xqd=term)
+        page = H.document_fromstring(rep.read())
+        trs = page.xpath('//table[@id="Table1"]/tr')
+        rows = []
+        r_td = re.compile(r'>([^<]*)<')
+        td_convertor = lambda x: self.parser.unescape('\n'.join(r_td.findall(x)))
+        for tr in trs[2:]:
+            tds = tr.xpath('./td')
+            rows.append([td_convertor(H.tostring(x)) for x in tds])
+        return rows
+
+    def get_face(self):
+        url = self.cookie_url('readimagexs.aspx?xh=%s' % self.username)
+        return urllib2.urlopen(url).read()
+
 
 if __name__ == '__main__':
     jwc = JWC('202.115.175.161')
